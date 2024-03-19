@@ -178,3 +178,12 @@ resource "google_compute_instance" "web_server" {
     scopes = var.service_scope
   }
 }
+
+resource "google_dns_record_set" "DNS" {
+  name         = "csye6225webapp.online."
+  type         = "A"
+  ttl          = 300
+  managed_zone = "csye6225-webapp"
+
+  rrdatas = [google_compute_instance.web_server.network_interface[0].access_config[0].nat_ip]
+}

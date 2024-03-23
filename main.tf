@@ -68,7 +68,6 @@ resource "google_compute_firewall" "sql_firewall" {
     ports    = [var.sql_port]
   }
   source_ranges = [google_compute_subnetwork.webapp_subnet.ip_cidr_range]
-  # source_ranges = [var.source_ranges]
 }
 
 
@@ -85,10 +84,10 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   network                 = google_compute_network.vpc_network.self_link
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_ip_block.name]
-  lifecycle {
-    create_before_destroy = true 
-    prevent_destroy = false
-  }
+  # lifecycle {
+  #   create_before_destroy = true 
+  #   prevent_destroy = false
+  # }
 }
 
 # CloudSQL Instance
@@ -114,6 +113,7 @@ resource "google_sql_database_instance" "mysql" {
   }
   deletion_protection = var.if_delete
 }
+
 # Generate a random password for Cloud SQL user
 resource "random_password" "password" {
   length           = 16
@@ -132,11 +132,37 @@ resource "google_sql_database" "database" {
   instance = google_sql_database_instance.mysql.name
 }
 
+# Service Account
+resource "google_service_account" "vm_service_account" {
+  account_id   = var.ser_acc_id
+  display_name = var.ser_acc_dis
+  project      = var.project_id
+}
+
+# IAM Binding
+resource "google_project_iam_binding" "logging_admin" {
+  project = var.project_id
+  role    = "roles/logging.admin"
+  members = [
+    "serviceAccount:${google_service_account.vm_service_account.email}",
+    "serviceAccount:${var.service_account}"
+  ]
+}
+resource "google_project_iam_binding" "monitoring_metrics_writer" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+  members = [
+    "serviceAccount:${google_service_account.vm_service_account.email}",
+    "serviceAccount:${var.service_account}"
+  ]
+}
+
 # Compute Instance (VM)
 resource "google_compute_instance" "web_server" {
   name         = var.server_name
   machine_type = var.machine_type
   zone         = var.zone
+  allow_stopping_for_update = true
   boot_disk {
     initialize_params {
       image = var.image
@@ -152,7 +178,7 @@ resource "google_compute_instance" "web_server" {
   metadata_startup_script = <<-SCRIPT
     # Create .env file and assign configurations
     cat << EOF > /opt/csye6225/.env
-    MYSQL_HOST=127.0.0.1
+    MYSQL_HOST=${google_sql_database_instance.mysql.private_ip_address}
     MYSQL_PORT=${var.sql_port}
     PORT=${var.allow_port}
     DB_NAME=${google_sql_database.database.name}
@@ -167,23 +193,23 @@ resource "google_compute_instance" "web_server" {
     ./cloud-sql-proxy --private-ip --credentials-file /opt/csye6225/credentials.json ${google_sql_database_instance.mysql.connection_name} &
     sleep 5
 
-    # Write a confirmation message
+    # Write a pre-condition file
     echo 'Instance ready' > /tmp/instance_ready
     sudo systemctl stop webapp
     sudo systemctl start webapp
   SCRIPT
   # Service account
   service_account {
-    email  = var.service_account
+    email  = google_service_account.vm_service_account.email
     scopes = var.service_scope
   }
 }
 
+# DNS
 resource "google_dns_record_set" "DNS" {
-  name         = "csye6225webapp.online."
-  type         = "A"
+  name         = var.dns_name
+  type         = var.dns_type
   ttl          = 300
-  managed_zone = "csye6225-webapp"
-
+  managed_zone = var.dns_zone
   rrdatas = [google_compute_instance.web_server.network_interface[0].access_config[0].nat_ip]
 }

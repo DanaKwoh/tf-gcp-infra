@@ -5,13 +5,13 @@ variable "project_id" {
 variable "credentials_file" { 
     default = "credentials.json"
 }
-variable "service_account"{
-    default = "developer-dana@csye6225-cloudcomputing-2024.iam.gserviceaccount.com"
+variable "service_account" {
+  default = "developer-dana@csye6225-cloudcomputing-2024.iam.gserviceaccount.com"
 }
 
 # VPC
 variable "network"{
-    default = "assignment-5"
+    default = "assignment-6"
 }
 variable "auto_create"{
     default = false
@@ -100,6 +100,17 @@ variable "static_ip_name" {
   default = "static-ip"
 }
 
+# Service Account
+variable "ser_acc_id" {
+  default =  "vm-logging"
+}
+variable "ser_acc_dis" {
+  default = "VM Logging"
+}
+variable "service_scope" {
+  default = ["https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring.write"]
+}
+
 # Compute Instance (VM)
 variable "zone" {
   default = "us-central1-c"
@@ -121,9 +132,6 @@ variable "image_size"{
 }
 variable "image_type"{
     default = "pd-balanced"
-}
-variable "service_scope" {
-  default = ["cloud-platform"]
 }
 variable "sql_connection_name" {
   default = "cyse6225-cloudcomputing-webapp:us-central1:mysql-instance"
@@ -167,4 +175,15 @@ variable "user_name"{
 }
 variable "db_name"{
     default = "webapp"
+}
+
+# DNS
+variable "dns_name" {
+  default = "csye6225webapp.online."
+}
+variable "dns_zone" {
+  default = "csye6225-webapp"
+}
+variable "dns_type" {
+  default = "A"
 }

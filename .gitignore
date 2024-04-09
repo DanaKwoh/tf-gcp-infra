@@ -41,3 +41,4 @@ venv/
 # Ignore any other file or directory you want to exclude
 *.json
 *.DS_Store
+.DS_Store

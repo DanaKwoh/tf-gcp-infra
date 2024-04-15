@@ -138,7 +138,7 @@ resource "google_compute_firewall" "allow_proxy" {
   direction     = var.firewall_direction
   network       = google_compute_network.vpc_network.name
   priority      = 1000
-  source_ranges = [var.source_ranges]
+  source_ranges = [google_compute_global_address.default.address]
 }
 resource "google_compute_firewall" "health_check" {
   name = var.firewall6
@@ -300,6 +300,7 @@ resource "google_compute_instance_group_manager" "default" {
   base_instance_name = var.base_instance_name
   target_size        = 2
 }
+
 # Autoscaling
 resource "google_compute_autoscaler" "web_autoscaler" {
   name        = var.scaler_name

@@ -11,7 +11,7 @@ variable "service_account" {
 
 # VPC
 variable "network"{
-    default = "assignment-6"
+    default = "csye6225"
 }
 variable "auto_create"{
     default = false
@@ -243,7 +243,7 @@ variable "server_tag"{
     default = ["http-server"]
 }
 variable "image"{
-    default = "custom-image"
+    default = "debian-cloud/debian-11" # This was "custom-image"
 }
 variable "image_size"{
     default = 100
@@ -288,3 +288,7 @@ variable "dns_type" {
   default = "A"
 }
 
+
+# variable "image_id" {
+#   description = "read output from Packer"
+# }

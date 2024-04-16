@@ -73,23 +73,23 @@ resource "google_service_networking_connection" "private_vpc_connection" {
 
 #Cloud Key Management
 resource "google_kms_key_ring" "key_ring" {
-  name     = "key-ring"
+  name     = var.key_ring
   location = var.region
 }
 resource "google_kms_crypto_key" "vm_crypto_key" {
-  name            = "vm-cmek-key"
+  name            = var.key_name1
   key_ring        = google_kms_key_ring.key_ring.id
-  rotation_period = "2592000s"
+  rotation_period = var.rotation_period
 }
 resource "google_kms_crypto_key" "sql_crypto_key" {
-  name            = "sql-cmek-key"
+  name            = var.key_name2
   key_ring        = google_kms_key_ring.key_ring.id
-  rotation_period = "2592000s"
+  rotation_period = var.rotation_period
 }
 resource "google_kms_crypto_key" "storage_crypto_key" {
-  name            = "storage-cmek-key"
+  name            = var.key_name3
   key_ring        = google_kms_key_ring.key_ring.id
-  rotation_period = "2592000s"
+  rotation_period = var.rotation_period
 }
 
 

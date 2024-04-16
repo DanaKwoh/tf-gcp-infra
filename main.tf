@@ -3,7 +3,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "5.20.0"
+      version = "5.25.0"
     }
   }
 }
@@ -70,13 +70,35 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_ip_block.name]
 }
+
+#Cloud Key Management
+resource "google_kms_key_ring" "key_ring" {
+  name     = "key-ring"
+  location = var.region
+}
+resource "google_kms_crypto_key" "vm_crypto_key" {
+  name            = "vm-cmek-key"
+  key_ring        = google_kms_key_ring.key_ring.id
+  rotation_period = "2592000s"
+}
+resource "google_kms_crypto_key" "sql_crypto_key" {
+  name            = "sql-cmek-key"
+  key_ring        = google_kms_key_ring.key_ring.id
+  rotation_period = "2592000s"
+}
+resource "google_kms_crypto_key" "storage_crypto_key" {
+  name            = "storage-cmek-key"
+  key_ring        = google_kms_key_ring.key_ring.id
+  rotation_period = "2592000s"
+}
+
 # CloudSQL Instance
 resource "google_sql_database_instance" "mysql" {
   name                = var.mysql_name
   region              = var.region
   database_version    = var.db_version 
   depends_on = [google_service_networking_connection.private_vpc_connection]
-
+  encryption_key_name = google_kms_crypto_key.sql_crypto_key.id
   settings {
     tier               = var.tier
     disk_type          = var.disk_type
@@ -238,6 +260,9 @@ resource "google_compute_instance_template" "web_server_template" {
     disk_type  = var.image_type
     auto_delete  = true
     boot         = true
+    source_image_encryption_key {
+      kms_key_self_link = google_kms_crypto_key.vm_crypto_key.id
+    }
   }
   labels = {
     managed-by-cnrm = "true"
@@ -285,52 +310,53 @@ resource "google_compute_instance_template" "web_server_template" {
   }
 }
 
-# Compute Instance (VM)
-resource "google_compute_instance" "web_server" {
-  name         = var.server_name
-  machine_type = var.machine_type
-  zone         = var.zone
-  boot_disk {
-    initialize_params {
-      image = var.image
-      size  = var.image_size
-      type  = var.image_type
-    }
-  }
-  network_interface {
-    network = google_compute_network.vpc_network.self_link
-    subnetwork = google_compute_subnetwork.webapp_subnet.self_link
-    access_config {}
-  }
-  metadata_startup_script = <<-SCRIPT
-    # Create .env file and assign configurations
-    cat << EOF > /opt/csye6225/.env
-    MYSQL_HOST=127.0.0.1
-    MYSQL_PORT=${var.sql_port}
-    PORT=${var.allow_port}
-    DB_NAME=${google_sql_database.database.name}
-    DB_USER=${google_sql_user.users.name}
-    DB_PASSWORD=${google_sql_user.users.password}
-    EOF
-    
-    # Download and make the Cloud SQL Proxy executable
-    curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.9.0/cloud-sql-proxy.linux.amd64
-    sleep 3
-    chmod +x cloud-sql-proxy
-    ./cloud-sql-proxy --private-ip --credentials-file /opt/csye6225/credentials.json ${google_sql_database_instance.mysql.connection_name} &
-    sleep 5
 
-    # Write a confirmation message
-    echo 'Instance ready' > /tmp/instance_ready
-    sudo systemctl stop webapp
-    sudo systemctl start webapp
-  SCRIPT
-  # Service account
-  service_account {
-    email  = var.service_account
-    scopes = var.service_scope
-  }
-}
+# # Compute Instance (VM)
+# resource "google_compute_instance" "web_server_example" {
+#   name         = var.server_name
+#   machine_type = var.machine_type
+#   zone         = var.zone
+#   boot_disk {
+#     initialize_params {
+#       image = var.image
+#       size  = var.image_size
+#       type  = var.image_type
+#     }
+#   }
+#   network_interface {
+#     network = google_compute_network.vpc_network.self_link
+#     subnetwork = google_compute_subnetwork.webapp_subnet.self_link
+#     access_config {}
+#   }
+#   metadata_startup_script = <<-SCRIPT
+#     # Create .env file and assign configurations
+#     cat << EOF > /opt/csye6225/.env
+#     MYSQL_HOST=127.0.0.1
+#     MYSQL_PORT=${var.sql_port}
+#     PORT=${var.allow_port}
+#     DB_NAME=${google_sql_database.database.name}
+#     DB_USER=${google_sql_user.users.name}
+#     DB_PASSWORD=${google_sql_user.users.password}
+#     EOF
+    
+#     # Download and make the Cloud SQL Proxy executable
+#     curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.9.0/cloud-sql-proxy.linux.amd64
+#     sleep 3
+#     chmod +x cloud-sql-proxy
+#     ./cloud-sql-proxy --private-ip --credentials-file /opt/csye6225/credentials.json ${google_sql_database_instance.mysql.connection_name} &
+#     sleep 5
+
+#     # Write a confirmation message
+#     echo 'Instance ready' > /tmp/instance_ready
+#     sudo systemctl stop webapp
+#     sudo systemctl start webapp
+#   SCRIPT
+#   # Service account
+#   service_account {
+#     email  = var.service_account
+#     scopes = var.service_scope
+#   }
+# }
 
 
 # MIG
@@ -384,11 +410,15 @@ resource "google_dns_record_set" "DNS" {
 #   topic = google_pubsub_topic.verify_email_topic.name
 #   ack_deadline_seconds = 60
 # }
-# resource "google_storage_bucket" "my_bucket" {
-#   name     = "csy6255-webapp-serverless"
-#   location = var.region 
-#   force_destroy = true
-# }
+resource "google_storage_bucket" "my_bucket" {
+  name     = "csy6255-webapp-serverless"
+  location = var.region 
+  force_destroy = true
+  encryption {
+    # Use CMEK for Cloud Storage
+    default_kms_key_name = google_kms_crypto_key.storage_crypto_key.id
+  }
+}
 
 # resource "google_storage_bucket_object" "function_source" {
 #   name   = "email_func.zip"  # Name of the file inside the bucket

@@ -225,7 +225,7 @@ resource "google_compute_backend_service" "default" {
   }
 }
 
-# Compute Instance (VM)
+# Compute Instance Template
 resource "google_compute_instance_template" "web_server_template" {
   name         = var.server_name
   project      = var.project_id
@@ -284,6 +284,54 @@ resource "google_compute_instance_template" "web_server_template" {
     create_before_destroy = true
   }
 }
+
+# Compute Instance (VM)
+resource "google_compute_instance" "web_server" {
+  name         = var.server_name
+  machine_type = var.machine_type
+  zone         = var.zone
+  boot_disk {
+    initialize_params {
+      image = var.image
+      size  = var.image_size
+      type  = var.image_type
+    }
+  }
+  network_interface {
+    network = google_compute_network.vpc_network.self_link
+    subnetwork = google_compute_subnetwork.webapp_subnet.self_link
+    access_config {}
+  }
+  metadata_startup_script = <<-SCRIPT
+    # Create .env file and assign configurations
+    cat << EOF > /opt/csye6225/.env
+    MYSQL_HOST=127.0.0.1
+    MYSQL_PORT=${var.sql_port}
+    PORT=${var.allow_port}
+    DB_NAME=${google_sql_database.database.name}
+    DB_USER=${google_sql_user.users.name}
+    DB_PASSWORD=${google_sql_user.users.password}
+    EOF
+    
+    # Download and make the Cloud SQL Proxy executable
+    curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.9.0/cloud-sql-proxy.linux.amd64
+    sleep 3
+    chmod +x cloud-sql-proxy
+    ./cloud-sql-proxy --private-ip --credentials-file /opt/csye6225/credentials.json ${google_sql_database_instance.mysql.connection_name} &
+    sleep 5
+
+    # Write a confirmation message
+    echo 'Instance ready' > /tmp/instance_ready
+    sudo systemctl stop webapp
+    sudo systemctl start webapp
+  SCRIPT
+  # Service account
+  service_account {
+    email  = var.service_account
+    scopes = var.service_scope
+  }
+}
+
 
 # MIG
 resource "google_compute_instance_group_manager" "default" {

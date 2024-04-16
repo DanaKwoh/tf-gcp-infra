@@ -410,6 +410,13 @@ resource "google_dns_record_set" "DNS" {
 #   topic = google_pubsub_topic.verify_email_topic.name
 #   ack_deadline_seconds = 60
 # }
+data "google_storage_project_service_account" "gcs_account" {
+}
+resource "google_kms_crypto_key_iam_binding" "binding" {
+  crypto_key_id = google_kms_crypto_key.storage_crypto_key.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  members = ["serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"]
+}
 resource "google_storage_bucket" "my_bucket" {
   name     = "csy6255-webapp-serverless"
   location = var.region 
@@ -418,6 +425,7 @@ resource "google_storage_bucket" "my_bucket" {
     # Use CMEK for Cloud Storage
     default_kms_key_name = google_kms_crypto_key.storage_crypto_key.id
   }
+  depends_on = [google_kms_crypto_key_iam_binding.binding]
 }
 
 # resource "google_storage_bucket_object" "function_source" {

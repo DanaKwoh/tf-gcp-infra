@@ -292,3 +292,20 @@ variable "dns_type" {
 # variable "image_id" {
 #   description = "read output from Packer"
 # }
+
+# Cloud Key
+variable "key_ring" {
+  default = "key-ring2"
+}
+variable "key_name1" {
+  default = "vm-cmek-key"
+}
+variable "key_name2" {
+  default = "sql-cmek-key"
+}
+variable "key_name3" {
+  default = "storage-cmek-key"
+}
+variable "rotation_period" {
+  default = "2592000s"
+}

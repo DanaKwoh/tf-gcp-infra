@@ -13,6 +13,13 @@ provider "google" {
   project     = var.project_id
   region      = var.region
 }
+provider "google-beta" {
+  credentials = file(var.credentials_file)
+  project     = var.project_id
+  region      = var.region
+  zone        = var.zone
+}
+
 
 # VPC network
 resource "google_compute_network" "vpc_network" {
@@ -93,23 +100,23 @@ resource "google_kms_crypto_key" "storage_crypto_key" {
 }
 
 
-# resource "google_project_service_identity" "gcp_sa_cloud_sql" {
-#   provider = google-beta
-#   service  = "sqladmin.googleapis.com"
-# }
-# resource "google_kms_crypto_key_iam_binding" "crypto_key" {
-#   crypto_key_id = google_kms_crypto_key.sql_crypto_key.id
-#   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-#   members = [
-#     "serviceAccount:p475401550784-spdrgy@gcp-sa-cloud-sql.iam.gserviceaccount.com",
-#   ]
-# }
+resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+  provider = google-beta
+  service  = "sqladmin.googleapis.com"
+}
+resource "google_kms_crypto_key_iam_binding" "crypto_key" {
+  crypto_key_id = google_kms_crypto_key.sql_crypto_key.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  members = [
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
+  ]
+}
 # CloudSQL Instance
 resource "google_sql_database_instance" "mysql" {
   name                = var.mysql_name
   region              = var.region
   database_version    = var.db_version 
-  # encryption_key_name = google_kms_crypto_key.sql_crypto_key.id
+  encryption_key_name = google_kms_crypto_key.sql_crypto_key.id
   settings {
     tier               = var.tier
     disk_type          = var.disk_type

@@ -92,13 +92,24 @@ resource "google_kms_crypto_key" "storage_crypto_key" {
   rotation_period = "2592000s"
 }
 
+
+# resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+#   provider = google-beta
+#   service  = "sqladmin.googleapis.com"
+# }
+# resource "google_kms_crypto_key_iam_binding" "crypto_key" {
+#   crypto_key_id = google_kms_crypto_key.sql_crypto_key.id
+#   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+#   members = [
+#     "serviceAccount:p475401550784-spdrgy@gcp-sa-cloud-sql.iam.gserviceaccount.com",
+#   ]
+# }
 # CloudSQL Instance
 resource "google_sql_database_instance" "mysql" {
   name                = var.mysql_name
   region              = var.region
   database_version    = var.db_version 
-  depends_on = [google_service_networking_connection.private_vpc_connection]
-  encryption_key_name = google_kms_crypto_key.sql_crypto_key.id
+  # encryption_key_name = google_kms_crypto_key.sql_crypto_key.id
   settings {
     tier               = var.tier
     disk_type          = var.disk_type
@@ -114,6 +125,7 @@ resource "google_sql_database_instance" "mysql" {
     }
   }
   deletion_protection = var.if_delete
+  depends_on = [google_service_networking_connection.private_vpc_connection]
 }
 # Random password for Cloud SQL user
 resource "random_password" "password" {
